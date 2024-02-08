@@ -10,7 +10,7 @@ TARGET_DIR=target
 libserver: $(OBJ_DIR)/server.o
 	$(CC) -shared $(OBJ_DIR)/server.o -o $(TARGET_DIR)/$@.so $(FLAGS) 
 
-%.o: $(SRC_DIR)/server.c
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	$(CC) -c -o $@ $< $(FLAGS) -fPIC
 
 program: $(SRC_DIR)/main.c $(OBJ_DIR)/server.o $(SRC_DIR)/server.h
