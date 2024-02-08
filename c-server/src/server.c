@@ -1,9 +1,4 @@
-#include <arpa/inet.h>
-#include <asm-generic/errno.h>
-#include <ctype.h>
-#include <dirent.h>
 #include <errno.h>
-#include <fcntl.h>
 #include <netinet/in.h>
 #include <pthread.h>
 #include <regex.h>
@@ -13,8 +8,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 #include <unistd.h>
 
 #include "server.h"
@@ -37,6 +30,12 @@
 
 int server_fd;
 
+struct http_request {
+  char *file_name;
+  char *file_ext;
+  int is_get_request;
+};
+
 void log_error_code(int code) {
   if (ERROR_LOGGING_ENABLED && code < 0) {
     printf("LOG - ERROR CODE: ");
@@ -56,9 +55,9 @@ int setup_server(int port_number) {
   // create server socket
   server_fd = socket(AF_INET, SOCK_STREAM, 0);
   RETURN_CODE_IF_ERROR(server_fd, ERR_CODE_SOCKET_FAILED);
-	RETURN_CODE_IF_ERROR(
-			setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int)),
-			ERR_CODE_SET_SOCKET_PROP_FAILED);
+  RETURN_CODE_IF_ERROR(
+      setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int)),
+      ERR_CODE_SET_SOCKET_PROP_FAILED);
 
   // config socket
   server_addr.sin_family = AF_INET;
@@ -75,10 +74,148 @@ int setup_server(int port_number) {
   return 0;
 }
 
+const char *get_file_extension(const char *file_name) {
+  const char *dot = strrchr(file_name, '.');
+  if (!dot || dot == file_name) {
+    return "";
+  }
+  return dot + 1;
+}
+
+const char *get_mime_type(const char *file_ext) {
+  if (strcasecmp(file_ext, "txt") == 0) {
+    return "text/plain";
+  } else if (strcasecmp(file_ext, "json") == 0) {
+    return "text/json";
+  } else {
+    return "text/html";
+  }
+}
+
+char *url_decode(const char *src) {
+  size_t src_len = strlen(src);
+  char *decoded = malloc(src_len + 1);
+  size_t decoded_len = 0;
+
+  // decode %2x to hex
+  for (size_t i = 0; i < src_len; i++) {
+    if (src[i] == '%' && i + 2 < src_len) {
+      int hex_val;
+      sscanf(src + i + 1, "%2x", &hex_val);
+      decoded[decoded_len++] = hex_val;
+      i += 2;
+    } else {
+      decoded[decoded_len++] = src[i];
+    }
+  }
+
+  // add null terminator
+  decoded[decoded_len] = '\0';
+  return decoded;
+}
+
+void build_http_header(const char *file_name, const char *file_ext,
+                       char *response, size_t *response_len) {
+  // build HTTP header
+  const char *mime_type = get_mime_type(file_ext);
+  char *header = (char *)malloc(MAX_HTTP_RESPONSE_SIZE * sizeof(char));
+  snprintf(header, MAX_HTTP_RESPONSE_SIZE,
+           "HTTP/1.1 200 OK\r\n"
+           "Content-Type: %s\r\n"
+           "\r\n",
+           mime_type);
+
+  // copy header to response buffer
+  *response_len = 0;
+  memcpy(response, header, strlen(header));
+  *response_len += strlen(header);
+
+  free(header);
+}
+
+void build_http_body(const char *file_name, const char *file_ext,
+                     char *response, size_t *response_len) {
+  // copy body to response buffer
+  char *message = "<h1> Success! </h1>";
+  memcpy(response + *response_len, message, strlen(message));
+  *response_len += strlen(message);
+}
+
+void build_404_response(char *response, size_t *response_len) {
+  snprintf(response, MAX_HTTP_RESPONSE_SIZE,
+           "HTTP/1.1 404 Not Found\r\n"
+           "Content-Type: text/plain\r\n"
+           "\r\n"
+           "404 Not Found");
+  *response_len = strlen(response);
+}
+
+void build_http_response(const char *file_name, const char *file_ext,
+                         char *response, size_t *response_len) {
+  build_http_header(file_name, file_ext, response, response_len);
+  build_http_body(file_name, file_ext, response, response_len);
+}
+
+struct http_request process_http_request(char *buffer) {
+  // check if request is GET
+  regex_t regex;
+  regcomp(&regex, "^GET /([^ ]*) HTTP/1", REG_EXTENDED);
+  regmatch_t matches[2];
+
+  int is_get_request = regexec(&regex, buffer, 2, matches, 0) == 0;
+
+  char *file_name, *file_ext;
+
+  if (is_get_request) {
+    // extract filename from request and decode URL
+    buffer[matches[1].rm_eo] = '\0';
+    const char *url_encoded_file_name = buffer + matches[1].rm_so;
+    file_name = url_decode(url_encoded_file_name);
+
+    // get file extension
+    file_ext = (char *)malloc(sizeof(char) * 32);
+    strcpy(file_ext, get_file_extension(file_name));
+  }
+  regfree(&regex);
+
+  struct http_request request = {.file_name = file_name,
+                                 .file_ext = file_ext,
+                                 .is_get_request = is_get_request};
+
+  return request;
+}
+
 void *handle_client(void *arg) {
   int client_fd = *((int *)arg);
-  printf("RECEIVED SOMETHING\n");
+  char *buffer = (char *)malloc(MAX_HTTP_RESPONSE_SIZE * sizeof(char));
+
+  // receive request data from client and store into buffer
+  ssize_t bytes_received = recv(client_fd, buffer, MAX_HTTP_RESPONSE_SIZE, 0);
+  if (bytes_received > 0) {
+    struct http_request request = process_http_request(buffer);
+
+    char *response = (char *)malloc(MAX_HTTP_RESPONSE_SIZE * 2 * sizeof(char));
+    size_t response_len;
+
+    if (request.is_get_request) {
+      // build HTTP response
+      build_http_response(request.file_name, request.file_ext, response,
+                          &response_len);
+    } else {
+      build_404_response(response, &response_len);
+    }
+
+    // send HTTP response to client
+    send(client_fd, response, response_len, 0);
+
+    free(response);
+    free(request.file_name);
+    free(request.file_ext);
+  }
+
+  close(client_fd);
   free(arg);
+  free(buffer);
   return NULL;
 }
 
