@@ -48,7 +48,7 @@ int is_in_register(const struct url_register *url_register,
                    struct url_path **path, const char *input_path) {
   for (int i = 0; i < url_register->size; i++) {
     if (!strcmp(url_register->paths[i].path, input_path)) {
-			*path = &url_register->paths[i];
+      *path = &url_register->paths[i];
       return 1;
     }
   }
@@ -56,22 +56,25 @@ int is_in_register(const struct url_register *url_register,
   return 0;
 }
 
-void register_url(struct url_register *url_register, const struct url_path *path) {
-	struct url_path* list = (struct url_path*) malloc((url_register->size + 1) * sizeof(struct url_path));
-	memcpy(list, url_register->paths, sizeof(struct url_path) * url_register->size);
-	memcpy(&list[url_register->size], path, sizeof(struct url_path));
-	url_register->size++;
-	free(url_register->paths);
-	url_register->paths = list;
+void register_url(struct url_register *url_register,
+                  const struct url_path *path) {
+  struct url_path *list = (struct url_path *)malloc((url_register->size + 1) *
+                                                    sizeof(struct url_path));
+  memcpy(list, url_register->paths,
+         sizeof(struct url_path) * url_register->size);
+  memcpy(&list[url_register->size], path, sizeof(struct url_path));
+  url_register->size++;
+  free(url_register->paths);
+  url_register->paths = list;
 }
 
 void destroy_register(struct url_register *url_register) {
   free(url_register->paths);
-	free(url_register);
+  free(url_register);
 }
 
 int server_fd;
-struct url_register* url_register;
+struct url_register *url_register;
 
 void log_error_code(int code) {
   if (ERROR_LOGGING_ENABLED && code < 0) {
@@ -89,9 +92,9 @@ void log_error_code(int code) {
 int setup_server(int port_number) {
   struct sockaddr_in server_addr;
 
-	url_register = malloc(sizeof(struct url_register));
-	url_register->size = 0;
-	url_register->paths = NULL;
+  url_register = malloc(sizeof(struct url_register));
+  url_register->size = 0;
+  url_register->paths = NULL;
 
   // create server socket
   server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -175,7 +178,7 @@ void build_http_header(const char *file_name, const char *file_ext,
 }
 
 void build_http_body(const char *file_name, const char *file_ext,
-                     char *response, size_t *response_len, char* message) {
+                     char *response, size_t *response_len, char *message) {
   // copy body to response buffer
   memcpy(response + *response_len, message, strlen(message));
   *response_len += strlen(message);
@@ -237,9 +240,10 @@ void *handle_client(void *arg) {
     char *response = (char *)malloc(MAX_HTTP_RESPONSE_SIZE * 2 * sizeof(char));
     size_t response_len;
 
-		struct url_path* target_path;
+    struct url_path *target_path;
 
-    if (request.is_get_request && is_in_register(url_register, &target_path, request.file_name)) {
+    if (request.is_get_request &&
+        is_in_register(url_register, &target_path, request.file_name)) {
       // build HTTP response
       build_http_response(request.file_name, request.file_ext, response,
                           &response_len, target_path->response);
@@ -287,7 +291,7 @@ int run_server(int *request_count) {
 
 int clean_up_server() {
   RETURN_CODE_IF_ERROR(close(server_fd), ERR_CODE_CLOSE_FAILED);
-	destroy_register(url_register);
+  destroy_register(url_register);
 
   return 0;
 }
@@ -298,24 +302,10 @@ void sigint_callback() {
 }
 
 // Returns error code or the number of requests it successfully handled
-int start_server(int port_number) {
+int start_server() {
   int request_count = 0;
 
   signal(SIGINT, sigint_callback);
-
-  // Setup
-  RETURN_IF_ERROR(setup_server(port_number));
-
-	struct url_path home_path = {
-		.path = "home",
-		.response = "<h1> Home <h1>",
-	};
-	struct url_path about_path = {
-		.path = "about",
-		.response = "<h1> About <h1>",
-	};
-	register_url(url_register, &home_path);
-	register_url(url_register, &about_path);
 
   // Run server
   RETURN_IF_ERROR(run_server(&request_count));
@@ -324,4 +314,19 @@ int start_server(int port_number) {
   RETURN_IF_ERROR(clean_up_server());
 
   return request_count;
+}
+
+int python_register_url(char *path, char *response) {
+  printf("Registring path '%s' with response: %s\n", path, response);
+
+	// FIX Currently the allocations here are not freed properly, so mem leak 
+  struct url_path *url = (struct url_path *)malloc(sizeof(struct url_path));
+  url->path = malloc(sizeof(char) * strlen(path));
+  strcpy(url->path, path);
+  url->response = malloc(sizeof(char) * strlen(response));
+  strcpy(url->response, response);
+
+  register_url(url_register, url);
+
+  return 0;
 }

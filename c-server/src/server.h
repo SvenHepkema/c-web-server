@@ -20,7 +20,8 @@ const int ERR_CODE_SET_SOCKET_PROP_FAILED = -6;
 
 // ================
 
-
-int start_server(int port_number);
+int python_register_url(char* path, char* response);
+int setup_server(int port_number);
+int start_server();
 
 #endif // SERVER_H

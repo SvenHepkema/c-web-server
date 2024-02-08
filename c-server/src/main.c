@@ -5,5 +5,6 @@
 
 
 int main() {
-	start_server(8080);
+	setup_server(8080);
+	start_server();
 }
