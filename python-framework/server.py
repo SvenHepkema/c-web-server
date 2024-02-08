@@ -37,13 +37,17 @@ class Server:
 
         If the amount of handled requests is negative, the server crashed,
         """
-        print(f"Starting on port {self.port}")
+
+        print(f"Started the server on port {self.port}. The paths below are available:")
+        for page in self.pages:
+            print(page.get_full_url())
 
         self._check_result(lib.start_server(), "Server")
 
 
     def register(self, page) -> None:
         lib.python_register_url(bytes(page.url, 'utf-8'), bytes(page.response, 'utf-8'))
+        self.pages.append(page)
 
 
 
@@ -60,6 +64,10 @@ class UrlPath:
 
     def __repr__(self) -> str:
         return f"UrlPath '{self.url}' returning: {self.response}"
+
+    def register(self):
+        self.server.register(self)
+        return self
 
 
 
@@ -85,8 +93,9 @@ class HtmlPage(UrlPath):
         return self
 
 
-    def button(self, text: str, page):
-        self.response += f"<a href=\"{page.get_full_url()}\"><button type=\"button\">{text}</button></a>"
+    def link_button(self, text: str, page):
+        self.response += f"<a href=\"{page.url}\" class=\"button\">"
+        self.response += f"<button>{text}</button></a>"
         return self
 
 
