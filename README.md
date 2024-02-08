@@ -4,7 +4,7 @@ This project consists of c code that interoperates with python to create my own 
 
 The following piece of code is a full example of how a programmer can create their own website in just a few lines of code. To create the server, simply create a `Server` object. To then create webpages, the user can create `HtmlPage` objects and use it's functions via the builder pattern to create a html page. There are also methods to insert plain html into the webpage, to give the user the freedom to use other elements of html as well. After the object is done, simply call the register function on the page, and the server will then know what to return when a user accesses the corresponding url. After all necessary pages are added, start the server via the `start()` method.
 
-```
+```python
 from server import Server, HtmlPage
 
 server = Server(port=8080)
