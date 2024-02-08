@@ -34,6 +34,17 @@ struct http_request {
   int is_get_request;
 };
 
+void log_http_request(struct http_request *request) {
+  if (INFO_LOGGING_ENABLED) {
+    if (request->is_get_request) {
+      printf("GET ");
+    } else {
+      printf("UNKOWN ");
+    }
+    printf("REQUEST RECEIVED: \"%s\"\n", request->file_name);
+  }
+}
+
 struct url_path {
   char *path;
   char *response;
@@ -236,6 +247,7 @@ void *handle_client(void *arg) {
   ssize_t bytes_received = recv(client_fd, buffer, MAX_HTTP_RESPONSE_SIZE, 0);
   if (bytes_received > 0) {
     struct http_request request = process_http_request(buffer);
+    log_http_request(&request);
 
     char *response = (char *)malloc(MAX_HTTP_RESPONSE_SIZE * 2 * sizeof(char));
     size_t response_len;
@@ -317,9 +329,11 @@ int start_server() {
 }
 
 int python_register_url(char *path, char *response) {
-  printf("Registring path '%s' with response: %s\n", path, response);
+  if (INFO_LOGGING_ENABLED) {
+    printf("Registered path '%s' with response: %s\n", path, response);
+  }
 
-	// FIX Currently the allocations here are not freed properly, so mem leak 
+  // FIX Currently the allocations here are not freed properly, so mem leak
   struct url_path *url = (struct url_path *)malloc(sizeof(struct url_path));
   url->path = malloc(sizeof(char) * strlen(path));
   strcpy(url->path, path);

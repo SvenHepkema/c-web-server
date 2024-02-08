@@ -7,6 +7,7 @@
 
 // General
 const bool ERROR_LOGGING_ENABLED = true;
+const bool INFO_LOGGING_ENABLED = true;
 const int SOCKET_MAX_QUEUE = 10;
 const int MAX_HTTP_RESPONSE_SIZE = 1024 * 1024;
 
