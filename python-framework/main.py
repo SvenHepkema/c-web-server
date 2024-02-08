@@ -1,14 +1,17 @@
 #!/usr/bin/python3
 
-import interop
+from server import Server, HtmlPage
 
-port_number = 8080
+server = Server(port=8080)
 
-print(f"Starting server on port {port_number}")
+server.register(HtmlPage(server, "home")
+                .header("Home")
+                .paragraph("This is the home page."))
+server.register(HtmlPage(server, "about")
+                .header("About")
+                .paragraph("This is the about page.")
+                .subheader("Author")
+                .paragraph("I am the author."))
 
-n_requests = interop.start_server(port_number, [
-    interop.UrlPath("home", "<h1>Home</h1>"),
-    interop.UrlPath("about", "<h1>About</h1>"),
-])
+server.start()
 
-print(f"Handled {n_requests} requests.")
