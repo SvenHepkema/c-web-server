@@ -17,12 +17,12 @@ def start_server(port_number: int) -> int:
         -3: "Bind failed",
         -4: "Listen failed",
         -5: "Closing the server fd failed",
+        -6: "Setting a socket prop failed",
     }
 
     result = lib.start_server(port_number)
 
     if result in error_codes.keys():
-        print(f"!!!!! {result} !!!!!!")
         raise Exception(f"Server failed due to: {error_codes[result]}")
     else:
         return result
