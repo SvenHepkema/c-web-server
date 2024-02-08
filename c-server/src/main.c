@@ -1,8 +1,9 @@
 #include <stdio.h>
+#include <stdbool.h>
+
 #include "server.h"
 
 
 int main() {
-	int a = 1, b = 2;
-	printf("Result of adding %d and %d: %d\n", a, b, add(a, b));
+	start_server(8080);
 }

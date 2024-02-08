@@ -28,13 +28,50 @@
     }                                                                          \
   })
 
-int server_fd;
-
 struct http_request {
   char *file_name;
   char *file_ext;
   int is_get_request;
 };
+
+struct url_path {
+  char *path;
+  char *response;
+};
+
+struct url_register {
+  struct url_path *paths;
+  size_t size;
+};
+
+int is_in_register(const struct url_register *url_register,
+                   struct url_path **path, const char *input_path) {
+  for (int i = 0; i < url_register->size; i++) {
+    if (!strcmp(url_register->paths[i].path, input_path)) {
+			*path = &url_register->paths[i];
+      return 1;
+    }
+  }
+
+  return 0;
+}
+
+void register_url(struct url_register *url_register, const struct url_path *path) {
+	struct url_path* list = (struct url_path*) malloc((url_register->size + 1) * sizeof(struct url_path));
+	memcpy(list, url_register->paths, sizeof(struct url_path) * url_register->size);
+	memcpy(&list[url_register->size], path, sizeof(struct url_path));
+	url_register->size++;
+	free(url_register->paths);
+	url_register->paths = list;
+}
+
+void destroy_register(struct url_register *url_register) {
+  free(url_register->paths);
+	free(url_register);
+}
+
+int server_fd;
+struct url_register* url_register;
 
 void log_error_code(int code) {
   if (ERROR_LOGGING_ENABLED && code < 0) {
@@ -51,6 +88,10 @@ void log_error_code(int code) {
 
 int setup_server(int port_number) {
   struct sockaddr_in server_addr;
+
+	url_register = malloc(sizeof(struct url_register));
+	url_register->size = 0;
+	url_register->paths = NULL;
 
   // create server socket
   server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -134,9 +175,8 @@ void build_http_header(const char *file_name, const char *file_ext,
 }
 
 void build_http_body(const char *file_name, const char *file_ext,
-                     char *response, size_t *response_len) {
+                     char *response, size_t *response_len, char* message) {
   // copy body to response buffer
-  char *message = "<h1> Success! </h1>";
   memcpy(response + *response_len, message, strlen(message));
   *response_len += strlen(message);
 }
@@ -151,9 +191,9 @@ void build_404_response(char *response, size_t *response_len) {
 }
 
 void build_http_response(const char *file_name, const char *file_ext,
-                         char *response, size_t *response_len) {
+                         char *response, size_t *response_len, char *message) {
   build_http_header(file_name, file_ext, response, response_len);
-  build_http_body(file_name, file_ext, response, response_len);
+  build_http_body(file_name, file_ext, response, response_len, message);
 }
 
 struct http_request process_http_request(char *buffer) {
@@ -197,10 +237,12 @@ void *handle_client(void *arg) {
     char *response = (char *)malloc(MAX_HTTP_RESPONSE_SIZE * 2 * sizeof(char));
     size_t response_len;
 
-    if (request.is_get_request) {
+		struct url_path* target_path;
+
+    if (request.is_get_request && is_in_register(url_register, &target_path, request.file_name)) {
       // build HTTP response
       build_http_response(request.file_name, request.file_ext, response,
-                          &response_len);
+                          &response_len, target_path->response);
     } else {
       build_404_response(response, &response_len);
     }
@@ -245,6 +287,7 @@ int run_server(int *request_count) {
 
 int clean_up_server() {
   RETURN_CODE_IF_ERROR(close(server_fd), ERR_CODE_CLOSE_FAILED);
+	destroy_register(url_register);
 
   return 0;
 }
@@ -262,6 +305,17 @@ int start_server(int port_number) {
 
   // Setup
   RETURN_IF_ERROR(setup_server(port_number));
+
+	struct url_path home_path = {
+		.path = "home",
+		.response = "<h1> Home <h1>",
+	};
+	struct url_path about_path = {
+		.path = "about",
+		.response = "<h1> About <h1>",
+	};
+	register_url(url_register, &home_path);
+	register_url(url_register, &about_path);
 
   // Run server
   RETURN_IF_ERROR(run_server(&request_count));

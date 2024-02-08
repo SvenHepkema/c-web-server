@@ -1,3 +1,6 @@
+#ifndef SERVER_H
+#define SERVER_H
+
 // ================
 // CONSTANTS
 // ================
@@ -19,3 +22,5 @@ const int ERR_CODE_SET_SOCKET_PROP_FAILED = -6;
 
 
 int start_server(int port_number);
+
+#endif // SERVER_H
